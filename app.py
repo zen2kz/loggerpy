@@ -1,17 +1,8 @@
-from flask import Flask, render_template
+from flask import Flask
 import _thread
 import cam_scanner
+from routes import app
 
-app = Flask(__name__)
-
-#@app.route('/')
-#def index():
-#        return 'Hello world'
-
-@app.route('/')
-def hello_name():
-    user = "testpy"
-    return render_template('./index.html', name = user)
 
 
 def run(): 

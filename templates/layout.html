@@ -1,0 +1,19 @@
+<!doctype html>
+<html>
+    <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <script type = "text/javascript" src = "{{ url_for('static', filename = 'js/main.js') }}" ></script>
+        <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename = 'css/purecss/base-min.css') }}">
+        <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename = 'css/purecss/menus-min.css') }}">
+        <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename = 'css/styles.css') }}">
+        {% block head %}
+        {% endblock head %}
+    </head>
+   <body>
+        {% include "partials/menu.html" %}
+        <div class="content">
+        {% block content %}
+        {% endblock content %}
+        </div>
+   </body>
+</html>
