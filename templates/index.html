@@ -1,4 +1,19 @@
 {% extends "layout.html" -%}
 {% block content -%}
-    <h3>Home</h3>
+    <h3>Processing</h3>
+    <ul>
+        <li>Parts processed: {{ stats.getPartsProcessed() }} </li>
+        <li>Idle time: {{ '{0:.2g}'.format(stats.getIdleTimeMinutes()) }} minutes ({{ '{0:.2g}'.format(stats.getIdleTimePercent()) }}%)</li>
+        <li>Processing time: {{ '{0:.2g}'.format(stats.getProcessingTimeMinutes()) }} minutes ({{ '{0:.2g}'.format(stats.getProcessingTimePercent()) }}%)</li>
+        <li>Total time: {{ '{0:.2g}'.format(stats.getTotalTimeMinutes()) }} minutes</li>
+        <li>Longest idle time: {{ '{0:.2g}'.format(stats.getLongestIdleTimeSeconds()) }} sec.</li>
+        <li>Shortest idle time: {{ '{0:.2g}'.format(stats.getShortestIdleTimeSeconds()) }} sec.</li>
+        <li>Longest processing time: {{ '{0:.2g}'.format(stats.getLongestProcessingTimeSeconds()) }} sec.</li>
+        <li>Shortest processing time: {{ '{0:.2g}'.format(stats.getShortestProcessingTimeSeconds()) }} sec.</li>
+        <li>Average processing time: {{ '{0:.2g}'.format(stats.getAverageProcessingTimeSeconds()) }} sec.</li>
+        <li>File name: {{ stats.getFileName() }}</li>
+        <li>Updated at: {{ stats.getUpdatedAt() }}</li>
+        <li>State: {{ stats.getState() }} </li>
+        <li>Shift ID: {{ stats.getShiftID() }}</li>
+    </ul>
 {%- endblock content %}

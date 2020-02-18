@@ -1,11 +1,12 @@
 from flask import Flask, render_template
+from models.stats_manager import StatsManager
 
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    user = "testpy"
-    return render_template('./index.html', name = user)
+    stats = StatsManager.instance().get_stats()
+    return render_template('./index.html', stats = stats)
 
 @app.route('/downloads')
 def downloads():
