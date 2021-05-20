@@ -1,0 +1,11 @@
+[Unit]
+Description=PartsLogger
+After=network.target
+
+[Service]
+WorkingDirectory=/home/orangepi/loggerpy/
+ExecStart=/usr/bin/python3 /home/orangepi/loggerpy/app.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
