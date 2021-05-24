@@ -1,0 +1,7 @@
+shifts:
+  - start_time_hrs: 6
+    start_time_minutes: 30
+    name: "630AM"
+  - start_time_hrs: 16
+    start_time_minutes: 30
+    name: "430PM"
