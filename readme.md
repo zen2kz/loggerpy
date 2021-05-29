@@ -1,6 +1,9 @@
 TODO: 
-- get/set settings 
-- csv file
++ get settings 
+- set settings
++ csv file
+- sensor
 - clock
+- downloads
 - wifi AP script
 - set wifi password

@@ -7,12 +7,18 @@ from routes import app
 from models.stats_manager import StatsManager
 from models.stats import Stats
 
+started = False
+
 def run(cfg):
-    StatsManager.instance().set_stats(Stats(cfg))
-    try:
-        cam_scanner.start_scan(True)
-    except Exception as ex:
-        print(ex)
+    if not started:
+        print("run")
+        StatsManager.instance().set_stats(Stats(cfg))
+        try:
+            cam_scanner.start_scan()
+        except Exception as ex:
+            print(ex)
+    else: 
+        print("already started")
 
 def config():
     config = confuse.Configuration('PartsLogger', __name__)
@@ -24,4 +30,4 @@ def config():
 if __name__ == '__main__':
     cfg = config()
     run(cfg)
-    app.run(debug=True, host='0.0.0.0')
+    app.run(debug=False, host='0.0.0.0')

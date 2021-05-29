@@ -1,3 +1,4 @@
+import csv
 from datetime import datetime, timedelta
 from models.csv_file import CsvFile
 import sys
@@ -8,6 +9,7 @@ class Stats:
     __idleTimeMills = 0
     __processingTimeMills = 0
     __lastEvent = datetime.now()
+    __lastIdleMills = 0
 
     __longestIdleTimeMills = 0
     __shortestIdleTimeMills = 0
@@ -57,12 +59,15 @@ class Stats:
 
         self.__state = "idle"
 
+        self.__csv_file.write(self.get_shift(), str(self.__partsProcessed), str(newDuration/1000.0), self.__lastEvent.strftime("%m/%d/%Y"), self.__lastEvent.strftime("%H:%M:%S"),  now.strftime("%m/%d/%Y"), now.strftime("%H:%M:%S"), str(self.__lastIdleMills/1000.0))
+        self.__csv_file.write_summary(self.get_shift(), self)
     
     def startProcessing(self):
         now = datetime.now()
         tdelta = now - self.__lastEvent
         newDuration = tdelta.total_seconds()*1000.0
         print("start processing:"+ str(newDuration))
+        self.__lastIdleMills = newDuration
         self.__idleTimeMills += newDuration
         self.__lastEvent = now
 
@@ -119,7 +124,7 @@ class Stats:
         return self.__lastEvent
 
     def getFileName(self): 
-        return self.__csv_file.file_name(self.get_shift())
+        return self.__csv_file.file_name(self.get_shift(), False)
 
     def getShiftID(self):
         return self.get_shift()
