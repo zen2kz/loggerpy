@@ -4,4 +4,8 @@
 {%- endblock header %}
 {% block content -%}
     <h3>Downloads</h3>
+
+    {% for item in files %}
+        <p> <a href='/files/{{item}}' target='_blank' download='{{item}}'>{{ item }}</a></p>
+    {% endfor %}
 {%- endblock content %}

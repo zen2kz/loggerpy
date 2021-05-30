@@ -4,6 +4,6 @@ TODO:
 + csv file
 - sensor
 - clock
-- downloads
++ downloads
 - wifi AP script
 - set wifi password
