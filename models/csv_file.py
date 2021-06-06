@@ -1,7 +1,7 @@
 import sys
 import os
 import csv
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 class CsvFile:
@@ -13,13 +13,15 @@ class CsvFile:
         self.__workdir = os.getcwd()
 
     
-    def file_name(self, shift, summary): 
+    def file_name(self, shift, prevDay,  summary): 
         today = date.today()
+        if prevDay:
+            today = today - timedelta(days=1)
         postfix = "" if not summary else "_summary" 
         return "{workdir}/logs/{date}_{shift}{postfix}.csv".format(workdir=self.__workdir, date=today.strftime("%Y%m%d"), shift = shift, postfix=postfix)
 
-    def write(self, shift_id, part_no, processing_sec, dstart, tstart, dend, tend, idle_sec):
-        fname = self.file_name(shift_id, False)
+    def write(self, shift_id, prevDay, part_no, processing_sec, dstart, tstart, dend, tend, idle_sec):
+        fname = self.file_name(shift_id, prevDay, False)
         path = Path(fname)
         add_header = not path.is_file()
             
@@ -29,8 +31,8 @@ class CsvFile:
                 writer.writerow(['Part#','Processing (sec)','Start Date','Start Time', 'End Date', 'End Time', 'Idle (sec)'])
             writer.writerow([part_no, processing_sec, dstart, tstart, dend, tend, idle_sec])
 
-    def write_summary(self, shift_id, stats):
-        fname = self.file_name(shift_id, True)
+    def write_summary(self, shift_id, prevDay, stats):
+        fname = self.file_name(shift_id, prevDay, True)
             
         with open(fname, 'w') as csvfile:
             writer = csv.writer(csvfile, dialect=csv.excel)

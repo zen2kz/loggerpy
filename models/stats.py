@@ -29,17 +29,30 @@ class Stats:
         shift_name = "none"
         if self.__cfg["shifts"]!= None:
             i = 0
+            prevDay = True
             for sh in self.__cfg["shifts"]:
                 i=i+1
-                hrs = sh["start_time_hrs"].get()
-                min = sh["start_time_minutes"].get()
-                d = datetime(now.year, now.month, now.day, hrs, min)
-                td = now-d
-                if td.total_seconds()>0:
-                    shift_name = sh["name"].get()
-                else:
-                    break
-        return shift_name
+                enabled = sh["enabled"].get()
+                if enabled:
+                    hrs = sh["start_time_hrs"].get()
+                    min = sh["start_time_minutes"].get()
+                    d = datetime(now.year, now.month, now.day, hrs, min)
+                    td = now-d
+                    if td.total_seconds()>0:
+                        shift_name = sh["name"].get()
+                        prevDay = False
+                    else:
+                        break
+
+            # if prevDay - get last shift from previous day
+            if prevDay:
+                for sh in self.__cfg["shifts"]:
+                    enabled = sh["enabled"].get()
+                    if enabled:
+                        shift_name = sh["name"].get()
+        
+                
+        return shift_name, prevDay
 
     def processed(self):
         self.__partsProcessed += 1
@@ -59,8 +72,9 @@ class Stats:
 
         self.__state = "idle"
 
-        self.__csv_file.write(self.get_shift(), str(self.__partsProcessed), str(newDuration/1000.0), self.__lastEvent.strftime("%m/%d/%Y"), self.__lastEvent.strftime("%H:%M:%S"),  now.strftime("%m/%d/%Y"), now.strftime("%H:%M:%S"), str(self.__lastIdleMills/1000.0))
-        self.__csv_file.write_summary(self.get_shift(), self)
+        shift, prevDay = self.get_shift()
+        self.__csv_file.write(shift, prevDay, str(self.__partsProcessed), str(newDuration/1000.0), self.__lastEvent.strftime("%m/%d/%Y"), self.__lastEvent.strftime("%H:%M:%S"),  now.strftime("%m/%d/%Y"), now.strftime("%H:%M:%S"), str(self.__lastIdleMills/1000.0))
+        self.__csv_file.write_summary(shift, prevDay, self)
     
     def startProcessing(self):
         now = datetime.now()
@@ -124,10 +138,12 @@ class Stats:
         return self.__lastEvent
 
     def getFileName(self): 
-        return self.__csv_file.file_name(self.get_shift(), False)
+        shift, prevDay = self.get_shift()
+        return self.__csv_file.file_name(shift, prevDay, False)
 
     def getShiftID(self):
-        return self.get_shift()
+        shift, _ = self.get_shift()
+        return shift
 
     def getState(self):
         return self.__state

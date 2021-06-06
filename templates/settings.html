@@ -4,4 +4,46 @@
 {%- endblock header %}
 {% block content -%}
     <h3>Settings</h3>
+
+    <p>
+        <select id="networks">
+        {% for item in networks %}
+            <option value="{{item}}">{{item}}</option>
+        {% endfor %}
+        </select>
+    </p>
+
+    <h3>Shifts</h3>
+
+    <form class="pure-form pure-form-aligned" method="post" action="/shifts">
+        <fieldset>
+            <div class="pure-control-group">
+                <input type="checkbox" id="hasShift1" name="hasShift1" {{'checked' if shifts[0].enabled else ''}} /> 
+                <label for="shift1Name">#1</label>
+                <input type="text" id="shift1name" name="shift1name" placeholder="Name" value="{{shifts[0].name}}" />
+
+                <label for="shift1time">Starts at</label>
+                <input type="text" pattern="([01]?[0-9]|2[0-3]):[0-5][0-9]" id="shift1time" name="shift1time" value="{{shifts[0].startsAt}}"/>
+            </div>
+            <div class="pure-control-group">
+                <input type="checkbox" id="hasShift2" name="hasShift2"  {{'checked' if shifts[1].enabled else ''}} /> 
+                <label for="shift2Name">#2</label>
+                <input type="text" id="shift2name"  name="shift2name" placeholder="Name" value="{{shifts[1].name}}" />
+
+                <label for="shift2time">Starts at</label>
+                <input type="text" pattern="([01]?[0-9]|2[0-3]):[0-5][0-9]" id="shift2time" name="shift2time"  value="{{shifts[1].startsAt}}"/>
+            </div>
+            <div class="pure-control-group">
+                <input type="checkbox" id="hasShift3" name="hasShift3"  {{'checked' if shifts[2].enabled else ''}} /> 
+                <label for="shift3Name">#3</label>
+                <input type="text" id="shift3name"  name="shift3name" placeholder="Name" value="{{shifts[2].name}}"/>
+
+                <label for="shift3time">Starts at</label>
+                <input type="text" pattern="([01]?[0-9]|2[0-3]):[0-5][0-9]" id="shift3time" name="shift3time"  value="{{shifts[2].startsAt}}"/>
+            </div>
+            <div class="pure-controls">
+                <button type="submit" class="pure-button pure-button-primary">Save</button>
+            </div>
+        </fieldset>
+    </form>
 {%- endblock content %}
