@@ -65,17 +65,95 @@ String getTime(){
   return String(tbs);
 }
 
+class Shift{
+  public:
+    int hours
+    int minutes
+}
+
+
+Shift[] readShifts() {
+  Shift shifts[2]
+  if (SD.begin(D0) && SD.exists("shifts.txt")) {
+   File dataFile = SD.open("shifts.txt", FILE_READ);
+      
+    int index = 0;
+    char hrs[5];
+    char minutes[5];
+    int line = 0;
+    
+    int next = dataFile.read();
+  
+    while (next != -1)
+    {
+      bool isMin = false
+      char nextChar = (char) next;
+      if (nextChar == '\n')
+      {
+        minutes[index] = '\0';
+        if (line <2) {
+          hrsStr = String(hrs);
+          hrsStr.replace("\r","");
+          hrsStr.replace("\n","");
+
+          minStr = String(minutes);
+          minStr.replace("\r","");
+          minStr.replace("\n","");
+          
+          shifts[line] = new Shift()
+          shifts[line].hours = hrsStr.toInt()
+          shifts[line].minutes = minStr.toInt()
+        }
+        index = 0;
+        line += 1;
+      }
+      else
+      {
+        if nextChar == ":" {
+          isMin = true
+          hrs[index] = '\0';
+          index = 0
+        } else {
+          if isMin {
+            minutes[index] = nextChar
+          } else {
+            hrs[index] = nextChar;
+          }
+          index += 1;
+        }
+      }
+  
+      next = dataFile.read();
+    }
+  
+    dataFile.close();
+   } else {
+     shifts[0] = new Shift()
+     shifts[0].hours = 6
+     shifts[0].minutes = 30
+
+     shifts[1] = new Shift()
+     shifts[1].hours = 16
+     shifts[1].minutes = 30
+   }
+}
+
 String getShiftId() {
+  Shift shifts[] = readShifts()
+
   byte second, minute, hour, dayOfWeek, dayOfMonth, month, year;
   // retrieve data from DS3231
   readDS3231time(&second, &minute, &hour, &dayOfWeek, &dayOfMonth, &month,
   &year);
 
-  char tbs[32];
+  int hm1 = shifts[0].hours * 60 + shifts[0].minutes
+  int hm2 = shifts[1].hours * 60 + shifts[1].minutes
 
-  if (hour>=6 && hour <16) return "6AM";
+  int curr = hour * 60 + minute
 
-  return "4PM";
+  if (curr>=hm1 && curr < hm2) return "AM";
+
+  return "PM";
 }
 
 String getDateAndTimeCsv(){
@@ -297,10 +375,27 @@ int stateInt = 0;
 unsigned long lastStats = 0;
 int lastPartCount = 0;
 
+int smoothData[5];
+
+bool smooth(bool val){
+  int sum = 0
+  for (int i=1; i<5; i++) {
+    smoothData[i-1] = smoothData[i]
+    sum += smoothData[i]
+    if (val) {
+      sum += 1
+      smoothData[4] = 1
+    } else {
+      smoothData[4] = 0
+    }
+  }
+  return sum/5.0 >= 0.5
+}
+
 void loop(){  
 
    stateInt = analogRead(A0);  //0-1024
-   bool state = stateInt>768;
+   bool state = smooth(stateInt>768);
 
    //Reset file for a new shift
    String shiftId = getShiftId();
@@ -369,6 +464,10 @@ void loop(){
               setDelay(url);
               renderPage(client);
             }
+            else if (url.indexOf("/SetShifts")>=0) {
+              setShifts(url);
+              renderPage(client);
+            }
             else if (url.indexOf("/SetTime")>=0) {
               setTime(url);
               renderPage(client);
@@ -420,6 +519,24 @@ void setDelay(String url) {
       val.replace("/SetDelay?delay=","");
       
       dataFile.println(val);
+      dataFile.close();
+    }
+  }
+}
+
+void setShifts(String url) {
+  if (hasSD) { 
+    File dataFile = SD.open("shifts.txt", sdfat::O_CREAT | sdfat::O_TRUNC | sdfat::O_WRITE);
+    if (dataFile) {
+      String val = url;
+      val.replace("/SetDelay?shift1=","");
+      val.replace("shift2=","");
+      int idx = val.indexOf("&")
+      String val1 = val.substring(0, idx-1)
+      String val2 = val.substring(idx+1)
+
+      dataFile.println(val1);
+      dataFile.println(val2);
       dataFile.close();
     }
   }
@@ -803,6 +920,12 @@ void renderSettings(WiFiClient client) {
 
       client.println("<h3>Time Settings</h3><p  style='text-align:right;'><form method='GET' action='/SetTime'>");
       client.println("<p>Date: <input type='datetime-local' style='display:inline;' id='date' name='date'/></p>");
+      client.println("<input type='submit' value='Apply'></form></p>");
+      client.println("</div>");
+
+      client.println("<h3>Shifts</h3><p  style='text-align:right;'><form method='GET' action='/SetShifts'>");
+      client.println("<p>Shift 1: <input type='time' style='display:inline;' id='shift1' name='shift1'/></p>");
+      client.println("<p>Shift 2: <input type='time' style='display:inline;' id='shift2' name='shift2'/></p>");
       client.println("<input type='submit' value='Apply'></form></p>");
       client.println("</div>");
 
