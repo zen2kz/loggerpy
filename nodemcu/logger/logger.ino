@@ -65,15 +65,14 @@ String getTime(){
   return String(tbs);
 }
 
-class Shift{
-  public:
-    int hours
-    int minutes
-}
+int shift1Hours = 6;
+int shift1Minutes = 30;
+int shift2Hours = 16;
+int shift2Minutes = 30;
 
 
-Shift[] readShifts() {
-  Shift shifts[2]
+
+void shiftsFromFile() {
   if (SD.begin(D0) && SD.exists("shifts.txt")) {
    File dataFile = SD.open("shifts.txt", FILE_READ);
       
@@ -86,36 +85,40 @@ Shift[] readShifts() {
   
     while (next != -1)
     {
-      bool isMin = false
+      bool isMin = false;
       char nextChar = (char) next;
       if (nextChar == '\n')
       {
         minutes[index] = '\0';
         if (line <2) {
-          hrsStr = String(hrs);
+          String hrsStr = String(hrs);
           hrsStr.replace("\r","");
           hrsStr.replace("\n","");
 
-          minStr = String(minutes);
+          String minStr = String(minutes);
           minStr.replace("\r","");
           minStr.replace("\n","");
-          
-          shifts[line] = new Shift()
-          shifts[line].hours = hrsStr.toInt()
-          shifts[line].minutes = minStr.toInt()
+
+          if (line == 0) {
+            shift1Hours = hrsStr.toInt();
+            shift1Minutes = minStr.toInt();
+          } else if (line == 1) {
+            shift2Hours = hrsStr.toInt();
+            shift2Minutes = minStr.toInt();
+          }
         }
         index = 0;
         line += 1;
       }
       else
       {
-        if nextChar == ":" {
-          isMin = true
+        if (nextChar == ':') {
+          isMin = true;
           hrs[index] = '\0';
-          index = 0
+          index = 0;
         } else {
-          if isMin {
-            minutes[index] = nextChar
+          if (isMin) {
+            minutes[index] = nextChar;
           } else {
             hrs[index] = nextChar;
           }
@@ -128,28 +131,26 @@ Shift[] readShifts() {
   
     dataFile.close();
    } else {
-     shifts[0] = new Shift()
-     shifts[0].hours = 6
-     shifts[0].minutes = 30
+     shift1Hours = 6;
+     shift1Minutes = 30;
 
-     shifts[1] = new Shift()
-     shifts[1].hours = 16
-     shifts[1].minutes = 30
+     shift2Hours = 16;
+     shift2Minutes = 30;
    }
 }
 
 String getShiftId() {
-  Shift shifts[] = readShifts()
+  shiftsFromFile();
 
   byte second, minute, hour, dayOfWeek, dayOfMonth, month, year;
   // retrieve data from DS3231
   readDS3231time(&second, &minute, &hour, &dayOfWeek, &dayOfMonth, &month,
   &year);
 
-  int hm1 = shifts[0].hours * 60 + shifts[0].minutes
-  int hm2 = shifts[1].hours * 60 + shifts[1].minutes
+  int hm1 = shift1Hours * 60 + shift1Minutes;
+  int hm2 = shift2Hours * 60 + shift2Minutes;
 
-  int curr = hour * 60 + minute
+  int curr = hour * 60 + minute;
 
   if (curr>=hm1 && curr < hm2) return "AM";
 
@@ -333,7 +334,7 @@ bool connectWiFi() {
 
   if (!connected) {
     WiFi.softAPConfig(local_IP, gateway, subnet);
-    WiFi.softAP("LAP0001", "logger123", 1, false, 4);
+    WiFi.softAP("LAP0002", "logger123", 1, false, 4);
     serialPrint("Own network. IP address: ");
     //serialPrintln(WiFi.softAPIP());
   }
@@ -378,18 +379,18 @@ int lastPartCount = 0;
 int smoothData[5];
 
 bool smooth(bool val){
-  int sum = 0
+  int sum = 0;
   for (int i=1; i<5; i++) {
-    smoothData[i-1] = smoothData[i]
-    sum += smoothData[i]
+    smoothData[i-1] = smoothData[i];
+    sum += smoothData[i];
     if (val) {
-      sum += 1
-      smoothData[4] = 1
+      sum += 1;
+      smoothData[4] = 1;
     } else {
-      smoothData[4] = 0
+      smoothData[4] = 0;
     }
   }
-  return sum/5.0 >= 0.5
+  return sum/5.0 >= 0.5;
 }
 
 void loop(){  
@@ -531,9 +532,9 @@ void setShifts(String url) {
       String val = url;
       val.replace("/SetDelay?shift1=","");
       val.replace("shift2=","");
-      int idx = val.indexOf("&")
-      String val1 = val.substring(0, idx-1)
-      String val2 = val.substring(idx+1)
+      int idx = val.indexOf("&");
+      String val1 = val.substring(0, idx-1);
+      String val2 = val.substring(idx+1);
 
       dataFile.println(val1);
       dataFile.println(val2);
