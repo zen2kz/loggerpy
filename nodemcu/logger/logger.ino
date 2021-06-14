@@ -2,9 +2,11 @@
 
 // Load Wi-Fi library
 #include <ESP8266WiFi.h>
+#include <SPI.h>
 #include <SD.h>
 #include <SDFS.h>
 #include "Wire.h"
+#include <ESP8266HTTPClient.h>
 #define DS3231_I2C_ADDRESS 0x68
 
 // Convert normal decimal numbers to binary coded decimal
@@ -65,15 +67,17 @@ String getTime(){
   return String(tbs);
 }
 
+bool hasSD() {
+  return SD.begin(D8);
+}
+
 int shift1Hours = 6;
 int shift1Minutes = 30;
 int shift2Hours = 16;
 int shift2Minutes = 30;
 
-
-
 void shiftsFromFile() {
-  if (SD.begin(D0) && SD.exists("shifts.txt")) {
+  if (SD.begin(D8) && SD.exists("shifts.txt")) {
    File dataFile = SD.open("shifts.txt", FILE_READ);
       
     int index = 0;
@@ -211,7 +215,6 @@ unsigned long minProc = 999999;
 unsigned long prevStateChangeMs = 0;
 
 bool prevState = false;
-bool hasSD = false;
 bool newFile = true;
 String fileName = "20000101_000000_data.csv";
 String fileDate = "20000101_000000";
@@ -228,11 +231,11 @@ String ssid = "";
 int repeatDelay = 500;
 String delayString = "500";
 
-bool enableSerial = false;
+bool enableSerial = true;
 
 
-bool readDelay() {
-   if (SD.begin(D0) && SD.exists("delay.txt")) {
+void readDelay() {
+   if (SD.begin(D8) && SD.exists("delay.txt")) {
    File dataFile = SD.open("delay.txt", FILE_READ);
       
     int index = 0;
@@ -264,15 +267,18 @@ bool readDelay() {
       }
   
       next = dataFile.read();
+      yield();
     }
   
     dataFile.close();
    }
 }
 
-bool connectWiFi() {
+void connectWiFi() {
+  serialPrintln("connect wifi");
   bool connected = false;
-  if (SD.begin(D0) && SD.exists("wifi.txt")) {
+  if (SD.begin(D8) && SD.exists("wifi.txt")) {
+      serialPrintln("reading wifi settings from a file");
       ssid = "";
       String pwd = "";
       File dataFile = SD.open("wifi.txt", FILE_READ);
@@ -285,7 +291,6 @@ bool connectWiFi() {
 
         while (next != -1)
         {
-         
           char nextChar = (char) next;
           if (nextChar == '\n')
           {
@@ -310,6 +315,7 @@ bool connectWiFi() {
           }
   
           next = dataFile.read();
+          yield();
         }
   
         dataFile.close();
@@ -322,6 +328,7 @@ bool connectWiFi() {
              delay(500);
              serialPrint(".");
              attempts -=1;
+             yield();
           }
           if (WiFi.status() == WL_CONNECTED) {
             connected = true;
@@ -331,12 +338,12 @@ bool connectWiFi() {
         }
     }
     
-
+   serialPrintln("check if need an access point");
   if (!connected) {
+    serialPrintln("wifi is not connected");
     WiFi.softAPConfig(local_IP, gateway, subnet);
-    WiFi.softAP("LAP0002", "logger123", 1, false, 4);
-    serialPrint("Own network. IP address: ");
-    //serialPrintln(WiFi.softAPIP());
+    WiFi.softAP("LAP0002", "logger123", 8, false, 4);
+    delay(100);
   }
      
 }
@@ -344,14 +351,20 @@ bool connectWiFi() {
 void setup() {
   if (enableSerial) {
     Serial.begin(115200);
+    Serial.setDebugOutput(true);
   }
   // Initialize the output variables as outputs
   pinMode(A0, INPUT);  
+  pinMode(D8, OUTPUT); 
 
   Wire.begin();
-  
+  yield();
+
+  serialPrintln("connecting wifi...");
   connectWiFi();
+  serialPrintln("reading delays...");
   readDelay();
+  serialPrintln("starting a webserver...");
   server.begin();
 }
 
@@ -393,30 +406,43 @@ bool smooth(bool val){
   return sum/5.0 >= 0.5;
 }
 
+int readTimeoutMs = 200;
+bool state = false;
+unsigned long lastRead = millis();
+unsigned long thisRead = millis();
+String shiftId = "";
+
 void loop(){  
 
-   stateInt = analogRead(A0);  //0-1024
-   bool state = smooth(stateInt>768);
+   //serialPrintln("start loop");
+ /* if (enableSerial) {
+    Serial.printf("Connection status: %d", WiFi.status());
+  }*/
 
-   //Reset file for a new shift
-   String shiftId = getShiftId();
-
-   //reset stats
-   if (currShiftId != shiftId) {
-     resetStats(shiftId);
-   }
-  
-  //SD Card
-  if (SD.begin(D0)) {
-    hasSD = true;
-    if (newFile) {
-      setFileName();
-      newFile = false;
+   // limit reading the sensor to decrease impact on performance
+   thisRead = millis();
+   if (thisRead - lastRead > readTimeoutMs) {
+     stateInt = analogRead(A0);  //0-1024
+     if (enableSerial) {
+      Serial.printf("Sensor: %d\n",stateInt);
     }
-  }
-  else {
-    hasSD = false;
-  }
+     state = smooth(stateInt>768);
+
+     //Reset file for a new shift
+     shiftId = getShiftId();
+  
+     //reset stats
+     if (currShiftId != shiftId) {
+       resetStats(shiftId);
+     }
+
+     if (newFile) {
+       setFileName();
+       newFile = false;
+     }
+     
+     lastRead = thisRead;
+   }
 
   //Do not allow changes more often than 0.5 sec  
   unsigned long now = millis();
@@ -433,9 +459,12 @@ void loop(){
     }
   }
 
+  //serialPrintln("procesing end");
+
   WiFiClient client = server.available();   // Listen for incoming clients 
-  
+  //serialPrintln("client");
   if (client) {                             // If a new client connects,
+    serialPrintln("has client ");
     String currentLine = "";                // make a String to hold incoming data from the client
     currentTime = millis();
     previousTime = currentTime;
@@ -493,11 +522,16 @@ void loop(){
           currentLine += c;      // add it to the end of the currentLine
         }
       }
+      yield();
     }
+     serialPrintln("header ");
     // Clear the header variable
     header = "";
+
+    serialPrintln("stoping ");
+    
     // Close the connection
-    client.stop();
+    client.stop(); 
   }
 
   //Write statistics every minute (if more parts has processed)
@@ -507,10 +541,13 @@ void loop(){
     lastPartCount = partCount;
     writeSummary();
   }
+
+   //serialPrintln("end loop");
+   //serialPrint("#");
 }
 
 void setDelay(String url) {
-  if (hasSD) { 
+  if (hasSD()) { 
     //if (SD.exists("delay.txt")) {
     //  SD.remove("delay.txt");
     //}
@@ -526,7 +563,7 @@ void setDelay(String url) {
 }
 
 void setShifts(String url) {
-  if (hasSD) { 
+  if (hasSD()) { 
     File dataFile = SD.open("shifts.txt", sdfat::O_CREAT | sdfat::O_TRUNC | sdfat::O_WRITE);
     if (dataFile) {
       String val = url;
@@ -544,7 +581,7 @@ void setShifts(String url) {
 }
 
 void setWifi(String url) {
-  if (hasSD) { 
+  if (hasSD()) { 
     //if (SD.exists("wifi.txt")) {
     //  SD.remove("wifi.txt");
     //}
@@ -582,7 +619,7 @@ void setFileName() {
 }
 
 void listFiles() {
-  if (hasSD) {
+  if (hasSD()) {
     fileIdx = 0;
     File root = SD.open("/");
     while (true) {
@@ -648,7 +685,7 @@ void fnPartProcessed() {
   }   
   partCount +=1;
 
-  if (hasSD) { 
+  if (hasSD()) { 
     bool firstLine = !SD.exists(fileName);
     File dataFile = SD.open(fileName, sdfat::O_CREAT | sdfat::O_APPEND | sdfat::O_WRITE);
     if (dataFile) {
@@ -664,7 +701,7 @@ void fnPartProcessed() {
 
 
 void writeSummary() {
-  if (hasSD) { 
+  if (hasSD()) { 
     String statsFile =  fileDate+"_summary.csv";
     //if (SD.exists(statsFile)) {
     //  SD.remove(statsFile);
@@ -718,7 +755,7 @@ void downloadFile(WiFiClient client, String fName) {
       client.println("Connection: close");
       client.println();
 
-      if (hasSD && SD.exists(fName)) {
+      if (hasSD() && SD.exists(fName)) {
         File dataFile = SD.open(fName, FILE_READ);
       
         int index = 0;
@@ -829,7 +866,7 @@ void renderPage(WiFiClient client) {
       else {
         client.println("<li>Average processing time: 0 sec; </li>");   
       }
-      if (hasSD) { 
+      if (hasSD()) { 
         client.println("<li>SD Card : Available </li>");    
       }
       else {
@@ -881,6 +918,7 @@ void renderFiles(WiFiClient client) {
           selected = " selected";
         }
         client.println("<li><a id='lnkDownload' href='/Download/"+files[i]+"' target='_blank' download='"+files[i]+"'>"+files[i]+"</a></li>");
+        yield();
       }
       client.println("</ul></div>");
    
