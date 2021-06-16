@@ -274,6 +274,8 @@ void readDelay() {
    }
 }
 
+const String deviceName = "LAP0003";
+
 void connectWiFi() {
   serialPrintln("connect wifi");
   bool connected = false;
@@ -322,6 +324,7 @@ void connectWiFi() {
         serialPrintln(ssid);
         serialPrintln(pwd);
         if ( ssid.length() >0 && pwd.length() >0) {
+           WiFi.hostname(deviceName);
            WiFi.begin(ssid, pwd);
            int attempts = 30; 
            while (WiFi.status() != WL_CONNECTED && attempts >0) {
@@ -342,7 +345,7 @@ void connectWiFi() {
   if (!connected) {
     serialPrintln("wifi is not connected");
     WiFi.softAPConfig(local_IP, gateway, subnet);
-    WiFi.softAP("LAP0002", "logger123", 8, false, 4);
+    WiFi.softAP(deviceName, "logger123", 8, false, 4);
     delay(100);
   }
      
