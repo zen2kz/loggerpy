@@ -9,6 +9,8 @@
 #include <ESP8266HTTPClient.h>
 #define DS3231_I2C_ADDRESS 0x68
 
+String deviceName = "LAP0002";
+
 // Convert normal decimal numbers to binary coded decimal
 byte decToBcd(byte val){
   return( (val/10*16) + (val%10) );
@@ -80,20 +82,19 @@ void shiftsFromFile() {
   if (SD.begin(D8) && SD.exists("shifts.txt")) {
    File dataFile = SD.open("shifts.txt", FILE_READ);
       
-    int index = 0;
-    char hrs[5];
-    char minutes[5];
+    String hrs;
+    String minutes;
     int line = 0;
     
     int next = dataFile.read();
-  
+
+    char nextChar = (char) next;
     while (next != -1)
     {
       bool isMin = false;
-      char nextChar = (char) next;
       if (nextChar == '\n')
       {
-        minutes[index] = '\0';
+        minutes += '\0';
         if (line <2) {
           String hrsStr = String(hrs);
           hrsStr.replace("\r","");
@@ -111,22 +112,19 @@ void shiftsFromFile() {
             shift2Minutes = minStr.toInt();
           }
         }
-        index = 0;
         line += 1;
       }
       else
       {
         if (nextChar == ':') {
           isMin = true;
-          hrs[index] = '\0';
-          index = 0;
+          hrs += '\0';
         } else {
           if (isMin) {
-            minutes[index] = nextChar;
+            minutes += nextChar;
           } else {
-            hrs[index] = nextChar;
+            hrs += nextChar;
           }
-          index += 1;
         }
       }
   
@@ -174,7 +172,7 @@ String getDateAndTimeCsv(){
   return String(tbs);
 }
 
-String getDateFileName(){
+String getFolderName() {
   byte second, minute, hour, dayOfWeek, dayOfMonth, month, year;
   // retrieve data from DS3231
   readDS3231time(&second, &minute, &hour, &dayOfWeek, &dayOfMonth, &month,
@@ -182,7 +180,20 @@ String getDateFileName(){
 
   char tbs[32];
 
-  sprintf(tbs, "20%02d%02d%02d_%02d%02d%02d", year, month, dayOfMonth, hour, minute, second);
+  sprintf(tbs, "/20%02d/%02d/", year, month);
+
+  return String(tbs);
+}
+
+String getDateFileName(String shiftId){
+  byte second, minute, hour, dayOfWeek, dayOfMonth, month, year;
+  // retrieve data from DS3231
+  readDS3231time(&second, &minute, &hour, &dayOfWeek, &dayOfMonth, &month,
+  &year);
+
+  char tbs[32];
+
+  sprintf(tbs, "20%02d%02d%02d_%02d%02d%02d_%s", year, month, dayOfMonth, hour, minute, second, shiftId);
 
   return String(tbs);
 }
@@ -218,20 +229,24 @@ bool prevState = false;
 bool newFile = true;
 String fileName = "20000101_000000_data.csv";
 String fileDate = "20000101_000000";
+String folderName = "/2000/01/";
+String fullFileName = "/2000/01/20000101_000000_data.csv";
 String currShiftId = "";
 
-String files[500]; 
+String files[100]; 
+String folders[100];
 int fileIdx = 0;
+int folderIdx = 0;
 
 IPAddress local_IP(192,168,0,1);
 IPAddress gateway(192,168,0,1);
 IPAddress subnet(255,255,255,0);
 
 String ssid = "";
-int repeatDelay = 500;
-String delayString = "500";
+int repeatDelay = 200;
+String delayString = "200";
 
-bool enableSerial = true;
+bool enableSerial = false;
 
 
 void readDelay() {
@@ -274,8 +289,6 @@ void readDelay() {
    }
 }
 
-const String deviceName = "LAP0003";
-
 void connectWiFi() {
   serialPrintln("connect wifi");
   bool connected = false;
@@ -307,6 +320,11 @@ void connectWiFi() {
               pwd.replace("\r","");
               pwd.replace("\n","");
             }
+            if (line == 2) {
+              deviceName = String(stringArray);
+              deviceName.replace("\r", "");
+              deviceName.replace("\n", "");
+            }
             index = 0;
             line += 1;
           }
@@ -324,7 +342,7 @@ void connectWiFi() {
         serialPrintln(ssid);
         serialPrintln(pwd);
         if ( ssid.length() >0 && pwd.length() >0) {
-           WiFi.hostname(deviceName);
+           WiFi.hostname(deviceName.c_str());
            WiFi.begin(ssid, pwd);
            int attempts = 30; 
            while (WiFi.status() != WL_CONNECTED && attempts >0) {
@@ -392,21 +410,21 @@ int stateInt = 0;
 unsigned long lastStats = 0;
 int lastPartCount = 0;
 
-int smoothData[5];
+int smoothData[3];
 
 bool smooth(bool val){
   int sum = 0;
-  for (int i=1; i<5; i++) {
+  for (int i=1; i<3; i++) {
     smoothData[i-1] = smoothData[i];
     sum += smoothData[i];
     if (val) {
       sum += 1;
-      smoothData[4] = 1;
+      smoothData[2] = 1;
     } else {
-      smoothData[4] = 0;
+      smoothData[2] = 0;
     }
   }
-  return sum/5.0 >= 0.5;
+  return sum/3.0 >= 0.5;
 }
 
 int readTimeoutMs = 200;
@@ -440,7 +458,7 @@ void loop(){
      }
 
      if (newFile) {
-       setFileName();
+       setFileName(shiftId);
        newFile = false;
      }
      
@@ -506,11 +524,17 @@ void loop(){
               renderPage(client);
             }
             else if (url.indexOf("/Files")>=0) {
-              renderFiles(client);
+              String dirName = url;
+              dirName.replace("/Files","");
+              if (dirName.length() == 0) {
+                dirName = "/";
+              }
+              renderFiles(client, dirName);
             }
             else if (url.indexOf("/SetWifi")>=0) {
               setWifi(url);
               renderPage(client);
+              ESP.restart();
             }
             else {
               renderPage(client);
@@ -593,6 +617,7 @@ void setWifi(String url) {
       String val = url;
       val.replace("/SetWifi?ssid=","");
       val.replace("&pwd=","\n");
+      val.replace("&device_name=","\n");
       
       dataFile.println(val);
       dataFile.close();
@@ -614,17 +639,18 @@ void setTime(String url) {
   setDS3231time(second,minute,hour,1,day,month,year);
 }
 
-void setFileName() {
-
-  fileDate = getDateFileName();
+void setFileName(String shiftId) {
+  folderName = getFolderName();
+  fileDate = getDateFileName(shiftId);
   fileName = fileDate+"_data.csv";
-
+  fullFileName = folderName + fileName;
 }
 
-void listFiles() {
+void listFiles(String dir) {
   if (hasSD()) {
     fileIdx = 0;
-    File root = SD.open("/");
+    folderIdx = 0; 
+    File root = SD.open(dir);
     while (true) {
   
       File entry =  root.openNextFile();
@@ -637,6 +663,12 @@ void listFiles() {
         files[fileIdx] = entryName;
         fileIdx++;
       }
+
+      if (entry.isDirectory()) {
+        folders[folderIdx] = entryName;
+        folderIdx++;
+      }
+      
       entry.close();
     }
     root.close();
@@ -689,14 +721,15 @@ void fnPartProcessed() {
   partCount +=1;
 
   if (hasSD()) { 
-    bool firstLine = !SD.exists(fileName);
-    File dataFile = SD.open(fileName, sdfat::O_CREAT | sdfat::O_APPEND | sdfat::O_WRITE);
+    SD.mkdir(folderName);
+    bool firstLine = !SD.exists(fullFileName);
+    File dataFile = SD.open(fullFileName, sdfat::O_CREAT | sdfat::O_APPEND | sdfat::O_WRITE);
     if (dataFile) {
       if (firstLine) {
-        dataFile.println("Part#,Processing (sec),Start Date,Start Time, End Date, End Time, Idle (sec)");
+        dataFile.println("Part#,Processing (sec),Start Date,Start Time, End Date, End Time, Idle (sec), Shift ID");
       }
       
-      dataFile.println(String(partCount)+","+String(currRange/1000.0)+ "," + timeStarted + "," + timeProcessed +"," + idleString );
+      dataFile.println(String(partCount)+","+String(currRange/1000.0)+ "," + timeStarted + "," + timeProcessed +"," + idleString+"," + shiftId );
       dataFile.close();
     }
   }  
@@ -705,11 +738,11 @@ void fnPartProcessed() {
 
 void writeSummary() {
   if (hasSD()) { 
-    String statsFile =  fileDate+"_summary.csv";
+    String statsFile =  folderName + fileDate+"_summary.csv";
     //if (SD.exists(statsFile)) {
     //  SD.remove(statsFile);
     //}
-    
+    SD.mkdir(folderName);
     File dataFile = SD.open(statsFile, sdfat::O_CREAT | sdfat::O_TRUNC | sdfat::O_WRITE);
     if (dataFile) {
       dataFile.println("Parts processed,"+String(partCount));
@@ -751,6 +784,19 @@ void writeSummary() {
 
 
 void downloadFile(WiFiClient client, String fName) {
+      if (fName.indexOf(".csv")<0) {
+          addHeader(client);
+
+          renderMenu(client);
+
+          client.println("<p>The file is not found or it is not a csv file.</p>");
+
+          client.println("</body></html>");
+      
+          // The HTTP response ends with another blank line
+          client.println();
+          return;
+      }
       // HTTP headers always start with a response code (e.g. HTTP/1.1 200 OK)
       // and a content-type so the client knows what's coming, then a blank line:
       client.println("HTTP/1.1 200 OK");
@@ -759,7 +805,7 @@ void downloadFile(WiFiClient client, String fName) {
       client.println();
 
       if (hasSD() && SD.exists(fName)) {
-        File dataFile = SD.open(fName, FILE_READ);
+         File dataFile = SD.open(fName, FILE_READ);
       
         int index = 0;
         char stringArray[500];
@@ -825,7 +871,7 @@ void addHeader(WiFiClient client) {
 void renderMenu(WiFiClient client) {
       // Web Page Heading   
       client.println("<body style='margin:0px;'><div class='container'>");
-      client.println("<div style='grid-column-start: 1; grid-column-end: 1;'><ul class='nav'><div><a href='/' class='logo'>Logger</a></div><li><a id='lnkDownload' href='/Files'>Files</a></li><li><a id='lnkSettings' href='/Settings'>Settings</a></li>");
+      client.println("<div style='grid-column-start: 1; grid-column-end: 1;'><ul class='nav'><div><a href='/' class='logo'>Logger - "+deviceName+"</a></div><li><a id='lnkDownload' href='/Files'>Files</a></li><li><a id='lnkSettings' href='/Settings'>Settings</a></li>");
       client.println("</ul></div>");
 }
 
@@ -875,7 +921,7 @@ void renderPage(WiFiClient client) {
       else {
         client.println("<li style='text-color:red;'>SD Card: Not Found </li>");   
       }
-      client.println("<li>File Name: "+fileName+"</li>");   
+      client.println("<li>File Name: "+fullFileName+"</li>");   
       client.println("<li>Updated at: "+getTime()+"</li>");  
       if (prevState) { 
         client.println("<li>State: Processing</li>");    
@@ -904,23 +950,39 @@ void renderPage(WiFiClient client) {
 }
 
 
-void renderFiles(WiFiClient client) {
+void renderFiles(WiFiClient client, String dirName) {
       addHeader(client);
 
       renderMenu(client);
 
       client.println("<div id=\"stats\"><ul>"); 
 
-      client.println("<h3>Download</h3>");
+      client.println("<h3>Download - "+dirName+"</h3>");
 
-      listFiles();
+      listFiles(dirName);
       client.println("<ul>");
+      if (dirName.length()>1) {
+        String parentDir = dirName;
+        int idx = parentDir.lastIndexOf("/");
+        parentDir.remove(idx);
+        idx = parentDir.lastIndexOf("/");
+        parentDir.remove(idx);
+        client.println("<li><a id='lnkFolder' href='/Files"+parentDir+"/'>..</a></li>");
+      }
+      for (int i=0; i<folderIdx; i++) {
+        String selected = "";
+        if (folders[i] == fileName) {
+          selected = " selected";
+        }
+        client.println("<li><a id='lnkFolder' href='/Files"+dirName+folders[i]+"/'>"+folders[i]+"</a></li>");
+        yield();
+      }
       for (int i=0; i<fileIdx; i++) {
         String selected = "";
         if (files[i] == fileName) {
           selected = " selected";
         }
-        client.println("<li><a id='lnkDownload' href='/Download/"+files[i]+"' target='_blank' download='"+files[i]+"'>"+files[i]+"</a></li>");
+        client.println("<li><a id='lnkDownload' href='/Download/"+ dirName +files[i]+"' target='_blank' download='"+files[i]+"'>"+files[i]+"</a></li>");
         yield();
       }
       client.println("</ul></div>");
@@ -953,7 +1015,8 @@ void renderSettings(WiFiClient client) {
       client.println("<h4 style='color:red;'>To apply settings please click Apply and restart the device.</h4>");
       client.println("<h3>WiFi Settings</h3><p style='text-align:right;'><form method='GET' action='/SetWifi'>");
       client.println("<p>SSID: <input type='text' style='display:inline;' id='ssid' name='ssid' value='"+ssid+"'/></p>");
-      client.println("<p>Password: <input type='text' style='display:inline;' id='pwd' name='pwd'/></p>");
+      client.println("<p>Password: <input type='password' style='display:inline;' id='pwd' name='pwd'/></p>");
+      client.println("<p>Device Name: <input type='pattern' pattern='[A-Za-z0-9_\\-]+' style='display:inline;' id='device_name' name='device_name' value='"+deviceName+"'/> <i>[A-Za-z0-9_\\-]</i></p>");
       client.println("<input type='submit' value='Apply'></form></p>");
 
       client.println("<h3>Delay Settings</h3><p style='text-align:right;'><form method='GET' action='/SetDelay'>");
@@ -966,8 +1029,8 @@ void renderSettings(WiFiClient client) {
       client.println("</div>");
 
       client.println("<h3>Shifts</h3><p  style='text-align:right;'><form method='GET' action='/SetShifts'>");
-      client.println("<p>Shift 1: <input type='time' style='display:inline;' id='shift1' name='shift1'/></p>");
-      client.println("<p>Shift 2: <input type='time' style='display:inline;' id='shift2' name='shift2'/></p>");
+      client.println("<p>Shift 1 (AM): <input type='time' style='display:inline;' id='shift1' name='shift1' value='"+timePartString(shift1Hours)+":"+timePartString(shift1Minutes)+"'/></p>");
+      client.println("<p>Shift 2 (PM): <input type='time' style='display:inline;' id='shift2' name='shift2' value='"+timePartString(shift2Hours)+":"+timePartString(shift2Minutes)+"'/></p>");
       client.println("<input type='submit' value='Apply'></form></p>");
       client.println("</div>");
 
@@ -975,4 +1038,13 @@ void renderSettings(WiFiClient client) {
       
       // The HTTP response ends with another blank line
       client.println();
+}
+
+String timePartString(int time) {
+  String strTime = String(time);
+  if (strTime.length() == 1) {
+    strTime ="0" + strTime;
+  } 
+
+  return strTime;
 }
